@@ -1,0 +1,26 @@
+# CNC Server Configuration
+# Copy file này thành config.yaml và chỉnh sửa giá trị.
+# config.yaml KHÔNG ĐƯỢC commit vào git.
+
+server:
+  host: "0.0.0.0"
+  port: 8443
+  tls_cert: "certs/server.crt"
+  tls_key: "certs/server.key"
+  unix_socket: "/tmp/cnc.sock"
+
+crypto:
+  # AES-256 key: 64 ký tự hex = 32 bytes
+  # Sinh key mới: python3 -c "import os; print(os.urandom(32).hex())"
+  key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+database:
+  path: "cnc.db"
+
+heartbeat:
+  interval: 30
+  timeout: 90
+
+loader:
+  timeout: 30
+  binary_dir: "dist/"
