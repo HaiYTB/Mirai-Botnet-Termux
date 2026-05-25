@@ -1,0 +1,8 @@
+# Danh sách target cho loader.py
+# Format: ip:port:user:pass
+# Mỗi dòng 1 target. Dòng bắt đầu bằng # là comment.
+
+# Ví dụ:
+# 192.168.1.10:22:root:admin123
+# 192.168.1.11:23:admin:password
+# 192.168.1.12:2222:ubuntu:ubuntu
