@@ -17,13 +17,6 @@ echo "[+] Python: $(python3 --version)"
 echo "[*] Installing Python dependencies..."
 pip install -r requirements.txt
 
-# Kiểm tra OpenSSL
-if ! command -v openssl &>/dev/null; then
-    echo "[-] OpenSSL not found. Install: pkg install openssl"
-    exit 1
-fi
-echo "[+] OpenSSL: $(openssl version)"
-
 # Kiểm tra compiler cho bot
 if command -v clang++ &>/dev/null; then
     echo "[+] C++ compiler: $(clang++ --version | head -1)"
@@ -33,13 +26,7 @@ else
 fi
 
 # Tạo thư mục
-mkdir -p certs dist/modules
-
-# Tạo chứng chỉ TLS nếu chưa có
-if [ ! -f certs/server.crt ]; then
-    echo "[*] Generating TLS certificates..."
-    bash scripts/generate_certs.sh
-fi
+mkdir -p dist/modules
 
 # Tạo config nếu chưa có
 if [ ! -f config.yaml ]; then
