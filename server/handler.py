@@ -16,7 +16,6 @@ from shared.protocol import (
     MessageType,
     create_auth_ack,
     create_cmd,
-    create_error,
     deserialize,
     serialize,
 )

@@ -7,7 +7,6 @@ Dùng aiosqlite để không block asyncio event loop.
 import json
 import logging
 import time
-from pathlib import Path
 
 import aiosqlite
 

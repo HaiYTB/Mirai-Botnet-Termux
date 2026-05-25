@@ -8,7 +8,7 @@ bot poll và thực thi, gửi kết quả về.
 import logging
 import uuid
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 

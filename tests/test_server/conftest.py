@@ -1,5 +1,4 @@
 """Test fixtures cho server module"""
-import asyncio
 import pytest
 from server.db import Database
 from server.commands import CommandQueue

@@ -12,8 +12,6 @@ Usage:
 import argparse
 import base64
 import logging
-import os
-import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -52,8 +50,6 @@ class Loader:
         ip = target["ip"]
         port = target["port"]
         user = target["user"]
-        password = target["pass"]
-
         result = {"ip": ip, "port": port, "user": user, "success": False, "os": "", "arch": "", "error": ""}
 
         try:

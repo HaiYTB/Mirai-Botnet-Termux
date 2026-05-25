@@ -1,5 +1,4 @@
 """Test command queue"""
-from server.commands import CommandQueue
 
 
 class TestCommandQueue:

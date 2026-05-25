@@ -2,8 +2,6 @@
 Shared CLI command handler — dùng chung cho TCP CLI và SSH interface.
 """
 
-import json
-import uuid
 
 from server.db import Database
 from server.commands import CommandQueue
