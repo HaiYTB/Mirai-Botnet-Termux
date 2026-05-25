@@ -212,3 +212,5 @@ dist/
 *.out
 targets.txt
 config.yaml
+certs/
+cnc.db
