@@ -49,6 +49,9 @@ async def start_ssh_server(
         def validate_password(self, username, pwd):
             return pwd == password
 
+        def session_requested(self):
+            return True
+
     class _FlushWriter:
         """Wrapper thêm no-op flush() cho SSH stdout để Rich Console hoạt động."""
         def __init__(self, writer):
@@ -67,7 +70,7 @@ async def start_ssh_server(
         console.print("[bold cyan]CNC CLI[/bold cyan] — type [bold]help[/bold] for commands, [bold]exit[/bold] to quit")
 
         while True:
-            stdout.write("[cyan][CNC]>[/cyan] ")
+            console.print("[cyan][CNC]>[/cyan] ", end="")
             line = await stdin.readline()
             if not line:
                 break
