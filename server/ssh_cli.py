@@ -69,7 +69,7 @@ async def start_ssh_server(
 
     async def _handle_session(stdin, stdout, stderr):
         flushable = _FlushWriter(stdout)
-        console = Console(file=flushable, force_terminal=True, width=120)
+        console = Console(file=flushable, force_terminal=True, width=80)
 
         console.print("[bold cyan]CNC CLI[/bold cyan] — type [bold]help[/bold] for commands, [bold]exit[/bold] to quit")
 
