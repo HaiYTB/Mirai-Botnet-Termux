@@ -40,6 +40,15 @@ class CommandQueue:
         logger.info("Command enqueued: %s -> %s(%s)", bot_id, module, cmd_id)
         return cmd_id
 
+    def enqueue_all(self, bot_ids: list[str], module: str, params: dict) -> list[tuple[str, str]]:
+        """Enqueue cùng một lệnh cho nhiều bot. Trả về [(bot_id, cmd_id), ...]."""
+        results = []
+        for bot_id in bot_ids:
+            cmd_id = self.enqueue(bot_id, module, params)
+            results.append((bot_id, cmd_id))
+        logger.info("Broadcast %s(%s) to %d bots", module, params, len(bot_ids))
+        return results
+
     def dequeue(self, bot_id: str) -> PendingCommand | None:
         """Lấy lệnh tiếp theo chưa gửi cho bot."""
         queue = self._queues.get(bot_id, [])

