@@ -66,6 +66,20 @@ class CNCServer:
         cli_port = self.config.get("server", {}).get("cli_port", 8444)
         self._tasks.append(asyncio.create_task(self._cli_listener(cli_host, cli_port)))
 
+        # SSH CLI listener
+        ssh_cfg = self.config.get("ssh", {})
+        if ssh_cfg.get("enabled", False):
+            from server.ssh_cli import start_ssh_server
+
+            ssh_host = ssh_cfg.get("host", "0.0.0.0")
+            ssh_port = ssh_cfg.get("port", 2222)
+            ssh_password = ssh_cfg.get("password", "")
+            self._tasks.append(
+                asyncio.create_task(
+                    start_ssh_server(ssh_host, ssh_port, ssh_password, self._db, self._cmd_queue)
+                )
+            )
+
         # Signal handlers
         for sig in (signal.SIGINT, signal.SIGTERM):
             try:
