@@ -1,4 +1,3 @@
-"""Test AES-256-GCM crypto"""
 import pytest
 from shared.crypto import AESCrypto
 

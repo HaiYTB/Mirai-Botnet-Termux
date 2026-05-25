@@ -1,10 +1,3 @@
-"""
-AES-256-GCM encrypt/decrypt cho toàn bộ traffic C2.
-
-Dùng thư viện cryptography (Fernet-style không phù hợp vì cần GCM).
-Output format: [12 byte IV][ciphertext + 16 byte tag]
-"""
-
 import os
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 

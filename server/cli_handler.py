@@ -1,14 +1,9 @@
-"""
-Shared CLI command handler — dùng chung cho TCP CLI và SSH interface.
-"""
-
-
 from server.db import Database
 from server.commands import CommandQueue
 
 
 class CLICommandHandler:
-    """Xử lý command dispatch cho cả TCP CLI và SSH."""
+    """Xử lý command dispatch."""
 
     def __init__(self, db: Database, cmd_queue: CommandQueue):
         self._db = db

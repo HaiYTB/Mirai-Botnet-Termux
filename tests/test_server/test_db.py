@@ -1,4 +1,3 @@
-"""Test database operations"""
 import pytest
 
 

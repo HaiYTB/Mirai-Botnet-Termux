@@ -1,6 +1,3 @@
-"""Test command queue"""
-
-
 class TestCommandQueue:
     def test_enqueue_dequeue(self, cmd_queue):
         cmd_id = cmd_queue.enqueue("bot-1", "shell", {"cmd": "whoami"})

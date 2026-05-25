@@ -1,20 +1,3 @@
-"""
-Giao thức message giữa CNC server và bot.
-
-Định dạng wire format:
-    [4 byte: payload length (network byte order)]
-    [payload: AES-GCM encrypted JSON]
-
-Message JSON structure:
-    {
-        "type": "auth" | "auth_ack" | "info" | "cmd" | "result" | "heartbeat" | "error",
-        "id": "<uuid>",
-        "timestamp": <unix epoch float>,
-        "nonce": "<16 byte hex>",
-        "data": { ... }
-    }
-"""
-
 import json
 import os
 import struct

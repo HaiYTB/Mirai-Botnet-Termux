@@ -1,9 +1,3 @@
-"""
-Xử lý giao thức từng bot: auth → info → heartbeat + cmd loop.
-
-Mỗi bot kết nối được xử lý trong một asyncio.Task riêng.
-"""
-
 import asyncio
 import hashlib
 import logging

@@ -1,5 +1,3 @@
-"""Tests for CLICommandHandler"""
-
 import pytest
 from server.cli_handler import CLICommandHandler
 from server.db import Database

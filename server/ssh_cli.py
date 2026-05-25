@@ -1,9 +1,3 @@
-"""
-SSH CLI server — cho phép điều khiển CNC server từ xa qua SSH.
-
-Dùng asyncssh để tích hợp với asyncio event loop của CNC server.
-"""
-
 import asyncio
 import logging
 

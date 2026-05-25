@@ -1,4 +1,3 @@
-"""Test fixtures cho server module"""
 import pytest
 from server.db import Database
 from server.commands import CommandQueue

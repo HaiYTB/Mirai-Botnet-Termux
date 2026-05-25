@@ -1,4 +1,3 @@
-# Test fixtures cho shared module
 import pytest
 from shared.crypto import AESCrypto
 

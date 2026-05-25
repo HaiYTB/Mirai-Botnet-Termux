@@ -1,15 +1,3 @@
-"""
-CLI cho attacker — kết nối vào CNC server qua TCP để ra lệnh.
-
-Hỗ trợ các lệnh:
-  bots list         — hiển thị tất cả bot
-  bots count        — thống kê tổng/online/offline/theo OS
-  bot info <id>     — chi tiết một bot
-  cmd <bot_id> <module> [params...]  — gửi lệnh tới bot
-  cmd status <id>   — xem kết quả lệnh
-  help, exit
-"""
-
 import argparse
 import json
 import socket

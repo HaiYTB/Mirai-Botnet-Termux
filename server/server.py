@@ -1,9 +1,3 @@
-"""
-CNC Server chính — lắng nghe kết nối từ bot qua TCP (AES-GCM encrypted).
-
-Dùng asyncio để xử lý hàng trăm kết nối đồng thời.
-"""
-
 import argparse
 import asyncio
 import logging

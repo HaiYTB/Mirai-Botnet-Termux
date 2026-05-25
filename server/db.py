@@ -1,9 +1,3 @@
-"""
-SQLite database cho CNC server — lưu bot list, command history, nonces.
-
-Dùng aiosqlite để không block asyncio event loop.
-"""
-
 import json
 import logging
 import time

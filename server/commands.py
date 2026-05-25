@@ -1,10 +1,3 @@
-"""
-Định nghĩa lệnh gửi tới bot và hàng đợi lệnh.
-
-Mỗi bot có một hàng đợi lệnh riêng. CNC server enqueue lệnh,
-bot poll và thực thi, gửi kết quả về.
-"""
-
 import logging
 import uuid
 from collections import defaultdict

@@ -1,4 +1,3 @@
-"""Test protocol message serialization"""
 import time
 
 from shared.protocol import (

