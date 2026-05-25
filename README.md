@@ -262,21 +262,6 @@ pytest tests/test_shared/ -v
 pytest tests/test_server/ -v
 ```
 
-## Rules
-
-This project follows 10 mandatory rules defined in `.claude/rules/`:
-
-1. **R1**: Encrypt all C2 traffic with AES-GCM
-2. **R2**: Never hardcode secrets
-3. **R3**: Bot is C++ static binary, no Python on victim
-4. **R4**: CNC server must use asyncio
-5. **R5**: Module payloads are independent binaries
-6. **R6**: Handle errors gracefully, never crash
-7. **R7**: Use logging, not print/printf
-8. **R8**: Consistent code style (PEP 8, C++17)
-9. **R9**: Git workflow with feature branches
-10. **R10**: Test before merge
-
 ## Disclaimer
 
 This project is for **educational and authorized security research purposes only**. Unauthorized access to computer systems is illegal. The authors assume no liability for misuse.
