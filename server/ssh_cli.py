@@ -40,6 +40,10 @@ async def start_ssh_server(
         def connection_made(self, conn):
             self._conn = conn
 
+        def connection_lost(self, exc):
+            if exc:
+                logger.warning("SSH connection lost: %s", exc)
+
         def begin_auth(self, username):
             return True
 
@@ -154,6 +158,10 @@ async def start_ssh_server(
             session_factory=lambda stdin, stdout, stderr: _handle_session(
                 stdin, stdout, stderr
             ),
+            keepalive_interval=30,
+            keepalive_count_max=5,
+            tcp_keepalive=True,
+            login_timeout=60,
         )
         logger.info("SSH CLI server listening on %s:%s", host, port)
         await asyncio.Event().wait()
