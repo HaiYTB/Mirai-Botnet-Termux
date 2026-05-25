@@ -29,7 +29,10 @@ async def start_ssh_server(
         def begin_auth(self, username):
             return True
 
-        def password_auth(self, username, pwd):
+        def password_auth_supported(self):
+            return True
+
+        def validate_password(self, username, pwd):
             return pwd == password
 
     async def _handle_session(stdin, stdout, stderr):
